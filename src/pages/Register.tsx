@@ -3,7 +3,8 @@ import api from '../api/client'
 import { useNavigate, Link } from 'react-router-dom'
 
 export default function Register() {
-  const [username, setUsername] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -15,12 +16,11 @@ export default function Register() {
     setLoading(true)
     setError(null)
     try {
-      // Use relative path so Vite dev server can proxy /auth -> backend (avoids CORS)
-      await fetch('/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email, password }),
+      await api.post('/auth/register', {
+        email,
+        password,
+        first_name: firstName,
+        last_name: lastName,
       })
       // После регистрации перенаправляем на страницу входа
       navigate('/login')
@@ -36,12 +36,16 @@ export default function Register() {
       <h2>Регистрация</h2>
       <form className="auth-form" onSubmit={submit}>
         <div>
-          <label>Имя пользователя</label>
-          <input value={username} onChange={e => setUsername(e.target.value)} />
+          <label>Имя</label>
+          <input value={firstName} onChange={e => setFirstName(e.target.value)} />
+        </div>
+        <div>
+          <label>Фамилия</label>
+          <input value={lastName} onChange={e => setLastName(e.target.value)} />
         </div>
         <div>
           <label>Email</label>
-          <input value={email} onChange={e => setEmail(e.target.value)} />
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} />
         </div>
         <div>
           <label>Пароль</label>

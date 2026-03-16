@@ -1,22 +1,14 @@
 import axios from 'axios'
 
-const api = axios.create({
-  baseURL: '/api/v1',
-  headers: { 'Content-Type': 'application/json' },
-  withCredentials: true, // если backend использует httpOnly cookie
-})
+// Use environment variable VITE_BACKEND_URL to point to backend (e.g. http://localhost:8000)
+// Fallback to empty string which will make requests relative to current origin (not recommended).
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 
-// Добавляем токен из localStorage в header Authorization, если есть
-api.interceptors.request.use(config => {
-  try {
-    const token = localStorage.getItem('accessToken')
-    if (token && config.headers) {
-      config.headers['Authorization'] = `Bearer ${token}`
-    }
-  } catch (e) {
-    // ignore
-  }
-  return config
+const api = axios.create({
+  baseURL: BACKEND,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 })
 
 export default api

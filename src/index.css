@@ -30,8 +30,13 @@ header h1{margin:0 0 12px 0}
 }
 .auth-container h2{margin-top:0}
 .auth-form{display:flex;flex-direction:column;gap:12px}
-.auth-form label{font-size:13px;color:#334155}
-.auth-form input{padding:10px 12px;border:1px solid #e6e9ee;border-radius:8px;font-size:14px}
+.auth-form > div:not(.auth-actions) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.auth-form label{font-size:13px;color:#334155; width: 60px;}
+.auth-form input{padding:10px 12px;border:1px solid #e6e9ee;border-radius:8px;font-size:14px; flex: 1;}
 .auth-actions{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
 .btn{background:#0ea5a4;color:white;border:none;padding:10px 14px;border-radius:8px;cursor:pointer}
 .btn.secondary{background:transparent;color:#0f172a;border:1px solid #e6e9ee}
@@ -39,3 +44,80 @@ header h1{margin:0 0 12px 0}
 .auth-footer{margin-top:12px;text-align:center;color:#475569;font-size:14px}
 .auth-link{color:#0ea5a4;text-decoration:none;margin-left:8px}
 
+/* Layout */
+.app-layout{display:flex;min-height:100vh}
+.sidebar{width:220px;background:#0f172a;color:white;display:flex;flex-direction:column;justify-content:space-between}
+.sidebar .brand{font-weight:700;padding:20px;font-size:18px}
+.sidebar-bottom{padding:16px;display:flex;flex-direction:column;gap:8px}
+.sidebar-btn{display:inline-block;padding:10px 12px;border-radius:8px;background:transparent;color:white;text-decoration:none;text-align:center;border:1px solid rgba(255,255,255,0.06)}
+.sidebar-btn:hover{background:rgba(255,255,255,0.03)}
+
+.main-area{flex:1;padding:24px;background:var(--bg)}
+.main-header{display:flex;align-items:center;justify-content:space-between}
+.boards-list{margin-top:18px}
+.projects-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;list-style:none;padding:0}
+.project-card{background:white;padding:16px;border-radius:8px;box-shadow:0 6px 20px rgba(16,24,40,0.04)}
+.project-card h3{margin:0 0 6px 0}
+.no-projects{padding:18px;background:#fff3f2;border-radius:8px;color:#7a1f1f}
+
+/* Modal */
+.modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.45);display:flex;align-items:center;justify-content:center;z-index:60}
+.modal{background:white;padding:18px;border-radius:10px;min-width:320px;max-width:600px;box-shadow:0 12px 40px rgba(2,6,23,0.4)}
+.modal h3{margin:0 0 12px 0}
+.form-row{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.form-row label{font-size:13px;color:#334155}
+.form-row input{padding:10px;border:1px solid #e6e9ee;border-radius:8px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px}
+.error{color:#b91c1c;margin-top:6px}
+
+.header-actions .btn{padding:8px 12px}
+
+.sidebar-btn-logout {
+  display: inline-block;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: transparent;
+  color: white;
+  text-decoration: none;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  width: 100%;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.sidebar-btn-logout:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.profile-card {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(16, 24, 40, 0.04);
+}
+
+.profile-field {
+  margin-bottom: 16px;
+}
+
+.profile-field strong {
+  display: inline-block;
+  width: 120px;
+  color: #475569;
+}
+
+.profile-field input {
+  padding: 8px 12px;
+  border: 1px solid #e6e9ee;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-left: 12px;
+}
+
+.profile-actions {
+  margin-top: 24px;
+  display: flex;
+  gap: 12px;
+}
