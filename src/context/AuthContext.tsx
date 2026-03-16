@@ -6,6 +6,7 @@ type User = any
 
 type AuthContextType = {
   user: User | null
+  setUser: React.Dispatch<React.SetStateAction<User | null>>
   isLoading: boolean
   login: (username: string, password: string) => Promise<void>
   logout: () => void
@@ -88,7 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, setUser, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   )

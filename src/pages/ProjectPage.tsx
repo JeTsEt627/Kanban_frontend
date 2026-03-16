@@ -4,6 +4,7 @@ import api from '../api/client'
 import Sidebar from '../components/Sidebar'
 import CreateTaskModal from '../components/CreateTaskModal'
 import EditColumnsModal from '../components/EditColumnsModal'
+import TaskDetailsModal from '../components/TaskDetailsModal'
 import '../index.css'
 
 type ProjectUser = { id: number; email: string; first_name?: string; last_name?: string }
@@ -19,6 +20,7 @@ export default function ProjectPage() {
   const [error, setError] = useState<string | null>(null)
   const [createTaskModalOpen, setCreateTaskModalOpen] = useState(false) // State for task modal
   const [editColumnsModalOpen, setEditColumnsModalOpen] = useState(false) // State for edit column modal
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const dragPreviewRef = React.useRef<{ element: HTMLElement, offsetX: number, offsetY: number } | null>(null)
 
   const refreshData = async () => {
@@ -208,6 +210,18 @@ export default function ProjectPage() {
       refreshData()
   }
 
+  const handleTaskUpdated = (updatedTask: any) => {
+      setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t))
+      if (selectedTask && selectedTask.id === updatedTask.id) {
+          setSelectedTask(updatedTask)
+      }
+  }
+
+  const handleTaskDeleted = (taskId: number) => {
+      setTasks(tasks.filter(t => t.id !== taskId))
+      setSelectedTask(null)
+  }
+
   if (loading) return <div className="app-layout"><Sidebar /><main className="main-area">Загрузка...</main></div>
   if (error) return <div className="app-layout"><Sidebar /><main className="main-area"><div className="error">{error}</div></main></div>
   if (!project) return <div className="app-layout"><Sidebar /><main className="main-area">Проект не найден</main></div>
@@ -314,6 +328,24 @@ export default function ProjectPage() {
         onUpdate={handleColumnsUpdated}
         projectId={projectId || ''}
       />
+      {selectedTask && (
+        <TaskDetailsModal
+          open={!!selectedTask}
+          onClose={() => setSelectedTask(null)}
+          task={selectedTask as any}
+          onUpdate={handleTaskUpdated}
+          onDelete={handleTaskDeleted}
+          projectUsers={(() => {
+            const allUsers = [...(project.users || [])];
+            if (project.creator) {
+              if (!allUsers.find((u: any) => u.id === project.creator.id)) {
+                allUsers.push(project.creator);
+              }
+            }
+            return allUsers;
+          })()}
+        />
+      )}
     </div>
   )
 }

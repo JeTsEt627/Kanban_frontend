@@ -14,10 +14,11 @@ export default function Profile() {
   const [middleName, setMiddleName] = useState(user?.middle_name || '')
 
   const handleSave = async () => {
+    if (!user) return
     setLoading(true)
     setError(null)
     try {
-      const res = await api.patch('/users/me', {
+      const res = await api.patch(`/users/profile/${user.id}`, {
         first_name: firstName,
         last_name: lastName,
         middle_name: middleName,

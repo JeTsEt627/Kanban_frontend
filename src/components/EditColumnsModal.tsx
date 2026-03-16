@@ -95,6 +95,7 @@ export default function EditColumnsModal({ open, onClose, columns, onUpdate, pro
                     <input 
                         value={col.name} 
                         onChange={e => handleNameChange(idx, e.target.value)} 
+                        className="form-input"
                         style={{flex: 1}}
                     />
                     <button type="button" className="btn secondary" onClick={() => moveUp(idx)} disabled={idx === 0}>↑</button>
