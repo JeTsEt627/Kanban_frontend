@@ -37,10 +37,26 @@ type Props = {
 export default function CreateProjectModal({ open, onClose, onCreated }: Props) {
   const { user, logout } = useAuth()
   const [name, setName] = useState('')
+  const [columns, setColumns] = useState<string[]>(['To Do', 'In Progress', 'Done'])
+  const [memberEmails, setMemberEmails] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   if (!open) return null
+
+  const handleAddColumn = () => {
+    setColumns([...columns, ''])
+  }
+
+  const handleColumnChange = (index: number, value: string) => {
+    const newCols = [...columns]
+    newCols[index] = value
+    setColumns(newCols)
+  }
+
+  const handleRemoveColumn = (index: number) => {
+    setColumns(columns.filter((_, i) => i !== index))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,14 +65,31 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
       setError('Введите название')
       return
     }
+    const filteredColumns = columns.map(c => c.trim()).filter(c => c)
+    if (filteredColumns.length === 0) {
+      setError('Добавьте хотя бы одну колонку')
+      return
+    }
+
     setLoading(true)
     try {
-      const payload: any = { name }
+      const emailsList = memberEmails
+        .split(',')
+        .map(e => e.trim())
+        .filter(e => e)
+
+      const payload: any = { 
+        name, 
+        columns: filteredColumns,
+        member_emails: emailsList
+      }
       if (user && (user as any).id) payload.created_by = (user as any).id
 
       const res = await api.post('/projects', payload)
       onCreated(res.data)
       setName('')
+      setMemberEmails('')
+      setColumns(['To Do', 'In Progress', 'Done'])
       onClose()
     } catch (err: any) {
       const status = err?.response?.status
@@ -79,8 +112,33 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
         <form onSubmit={handleSubmit}>
           <div className="form-row">
             <label>Название</label>
-            <input value={name} onChange={e => setName(e.target.value)} autoFocus />
+            <input value={name} onChange={e => setName(e.target.value)} autoFocus placeholder="Мой новый проект" />
           </div>
+
+          <div className="form-row">
+            <label>Участники (email через запятую)</label>
+            <input 
+              value={memberEmails} 
+              onChange={e => setMemberEmails(e.target.value)} 
+              placeholder="user1@example.com, user2@example.com" 
+            />
+          </div>
+
+          <div className="form-row">
+            <label>Колонки</label>
+            {columns.map((col, idx) => (
+              <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <input
+                  value={col}
+                  onChange={e => handleColumnChange(idx, e.target.value)}
+                  placeholder={`Колонка ${idx + 1}`}
+                />
+                <button type="button" onClick={() => handleRemoveColumn(idx)}>&times;</button>
+              </div>
+            ))}
+            <button type="button" onClick={handleAddColumn} style={{ fontSize: '0.9em' }}>+ Добавить колонку</button>
+          </div>
+
           {error && <div className="error">{error}</div>}
           <div className="modal-actions">
             <button type="button" onClick={onClose} disabled={loading}>Отмена</button>

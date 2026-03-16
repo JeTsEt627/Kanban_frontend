@@ -50,6 +50,7 @@ export default function Register() {
         <div>
           <label>Пароль</label>
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} />
+          <small>Пароль должен быть от 8 до 72 символов.</small>
         </div>
         {error && <div style={{ color: 'red' }}>{error}</div>}
 

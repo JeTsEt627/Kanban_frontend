@@ -5,7 +5,12 @@ import { Link } from 'react-router-dom'
 import CreateProjectModal from '../components/CreateProjectModal'
 import { useAuth } from '../context/AuthContext'
 
-type Project = { id: number; name: string; description?: string }
+type Project = { 
+  id: number; 
+  name: string; 
+  description?: string;
+  users?: { id: number; email: string }[] 
+}
 
 export default function Dashboard() {
   const [projects, setProjects] = useState<Project[] | null>(null)
@@ -84,6 +89,14 @@ export default function Dashboard() {
                     <li key={p.id} className="project-card">
                       <h3><Link to={`/projects/${p.id}`}>{p.name}</Link></h3>
                       <p>{p.description}</p>
+                      {p.users && p.users.length > 0 && (
+                        <div style={{ marginTop: '8px', fontSize: '0.85em', color: '#64748b' }}>
+                          <strong>Участники:</strong> {p.users.length}
+                          <div style={{ marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.users.map(u => u.email).join(', ')}>
+                             {p.users.map(u => u.email).join(', ')}
+                          </div>
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
