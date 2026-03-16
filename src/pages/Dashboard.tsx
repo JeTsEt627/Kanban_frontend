@@ -3,6 +3,7 @@ import Sidebar from '../components/Sidebar'
 import api from '../api/client'
 import { Link } from 'react-router-dom'
 import CreateProjectModal from '../components/CreateProjectModal'
+import DeleteProjectModal from '../components/DeleteProjectModal'
 import { useAuth } from '../context/AuthContext'
 
 type Project = { 
@@ -17,6 +18,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const { user, logout } = useAuth()
 
   useEffect(() => {
@@ -66,6 +69,26 @@ export default function Dashboard() {
     else refresh()
   }
 
+  const handleDeleteClick = (e: React.MouseEvent, project: Project) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setProjectToDelete(project);
+  }
+
+  const handleConfirmDelete = async () => {
+      if (!projectToDelete) return;
+      setDeleteLoading(true);
+      try {
+          await api.delete(`/projects/${projectToDelete.id}`);
+          setProjects(projects?.filter(p => p.id !== projectToDelete.id) || []);
+          setProjectToDelete(null);
+      } catch (err) {
+          alert("Не удалось удалить доску");
+      } finally {
+          setDeleteLoading(false);
+      }
+  }
+
   return (
     <div className="app-layout">
       <Sidebar />
@@ -86,15 +109,19 @@ export default function Dashboard() {
               {projects && projects.length > 0 ? (
                 <ul className="projects-grid">
                   {projects.map(p => (
-                    <li key={p.id} className="project-card">
+                    <li key={p.id} className="project-card" style={{ position: 'relative' }}>
+                      <button 
+                        onClick={(e) => handleDeleteClick(e, p)}
+                        className="delete-project-btn"
+                        title="Удалить доску"
+                      >
+                        &times;
+                      </button>
                       <h3><Link to={`/projects/${p.id}`}>{p.name}</Link></h3>
                       <p>{p.description}</p>
                       {p.users && p.users.length > 0 && (
                         <div style={{ marginTop: '8px', fontSize: '0.85em', color: '#64748b' }}>
                           <strong>Участники:</strong> {p.users.length}
-                          <div style={{ marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.users.map(u => u.email).join(', ')}>
-                             {p.users.map(u => u.email).join(', ')}
-                          </div>
                         </div>
                       )}
                     </li>
@@ -108,6 +135,13 @@ export default function Dashboard() {
         </section>
       </main>
       <CreateProjectModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={handleCreated} />
+      <DeleteProjectModal 
+        open={!!projectToDelete} 
+        onClose={() => setProjectToDelete(null)} 
+        onConfirm={handleConfirmDelete} 
+        projectName={projectToDelete?.name || ''} 
+        loading={deleteLoading}
+      />
     </div>
   )
 }

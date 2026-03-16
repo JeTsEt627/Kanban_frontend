@@ -17,7 +17,6 @@ export default function Sidebar() {
           </div>
         )}
         <Link to="/profile" className="sidebar-btn">Профиль</Link>
-        <Link to="/settings" className="sidebar-btn">Настройки</Link>
         <button onClick={logout} className="sidebar-btn-logout">Выйти</button>
       </div>
     </aside>

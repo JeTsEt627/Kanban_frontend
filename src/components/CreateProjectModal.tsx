@@ -112,7 +112,7 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
         <form onSubmit={handleSubmit}>
           <div className="form-row">
             <label>Название</label>
-            <input value={name} onChange={e => setName(e.target.value)} autoFocus placeholder="Мой новый проект" />
+            <input value={name} onChange={e => setName(e.target.value)} autoFocus placeholder="Мой новый проект" className="form-input" />
           </div>
 
           <div className="form-row">
@@ -121,6 +121,7 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
               value={memberEmails} 
               onChange={e => setMemberEmails(e.target.value)} 
               placeholder="user1@example.com, user2@example.com" 
+              className="form-input"
             />
           </div>
 
@@ -132,17 +133,23 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
                   value={col}
                   onChange={e => handleColumnChange(idx, e.target.value)}
                   placeholder={`Колонка ${idx + 1}`}
+                  className="form-input"
                 />
-                <button type="button" onClick={() => handleRemoveColumn(idx)}>&times;</button>
+                <button 
+                    type="button" 
+                    onClick={() => handleRemoveColumn(idx)} 
+                    className="btn secondary" 
+                    style={{color: '#b91c1c', borderColor: '#b91c1c', padding: '8px 12px', fontSize: '1em', borderRadius: '6px', lineHeight: '1'}}
+                >&times;</button>
               </div>
             ))}
-            <button type="button" onClick={handleAddColumn} style={{ fontSize: '0.9em' }}>+ Добавить колонку</button>
+            <button type="button" onClick={handleAddColumn} className="btn secondary" style={{ fontSize: '0.9em' }}>+ Добавить колонку</button>
           </div>
 
           {error && <div className="error">{error}</div>}
           <div className="modal-actions">
-            <button type="button" onClick={onClose} disabled={loading}>Отмена</button>
-            <button type="submit" disabled={loading}>{loading ? 'Создание...' : 'Создать'}</button>
+            <button type="button" onClick={onClose} disabled={loading} className="btn secondary">Отмена</button>
+            <button type="submit" disabled={loading} className="btn">{loading ? 'Создание...' : 'Создать'}</button>
           </div>
         </form>
       </div>
