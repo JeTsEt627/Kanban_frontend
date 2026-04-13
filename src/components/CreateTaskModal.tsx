@@ -49,19 +49,33 @@ export default function CreateTaskModal({ open, onClose, onCreated, projectId, c
   const [columnId, setColumnId] = useState<number | undefined>(columns.length > 0 ? columns[0].id : undefined)
   const [assignedTo, setAssignedTo] = useState<number | undefined>(undefined)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState(null as string | null)
 
-  // Set default assignee to current user when modal opens or users load
+  // Dropdowns state
+  const [colDropdownOpen, setColDropdownOpen] = useState(false)
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false)
+
   React.useEffect(() => {
     if (open && currentUser && !assignedTo) {
       setAssignedTo(currentUser.id)
     }
   }, [open, currentUser])
 
+  // Close dropdowns on outside click
+  React.useEffect(() => {
+    const handleGlobalClick = () => {
+      setColDropdownOpen(false)
+      setUserDropdownOpen(false)
+    }
+    window.addEventListener('click', handleGlobalClick)
+    return () => window.removeEventListener('click', handleGlobalClick)
+  }, [])
+
   if (!open) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // ... rest of handleSubmit (unchanged logic)
     setError(null)
     if (!title.trim()) {
       setError('Введите название задачи')
@@ -78,12 +92,9 @@ export default function CreateTaskModal({ open, onClose, onCreated, projectId, c
         project_id: parseInt(projectId, 10),
         column_id: columnId,
         title,
-        description: description.trim() || undefined, // Send undefined if empty
+        description: description.trim(),
       }
-      
-      if (assignedTo) {
-        payload.assigned_to = assignedTo
-      }
+      if (assignedTo) payload.assigned_to = assignedTo
 
       const res = await api.post('/tasks', payload)
       onCreated(res.data)
@@ -95,8 +106,7 @@ export default function CreateTaskModal({ open, onClose, onCreated, projectId, c
     } catch (err: any) {
       const status = err?.response?.status
       if (status === 401) {
-        // token invalid -> force logout
-        try { logout() } catch (e) { /* ignore */ }
+        try { logout() } catch (e) {}
         setError('Неавторизовано. Пожалуйста, войдите снова.')
       } else {
         setError(formatError(err) || err.message || 'Ошибка')
@@ -106,55 +116,103 @@ export default function CreateTaskModal({ open, onClose, onCreated, projectId, c
     }
   }
 
+  const selectedColumn = columns.find(c => c.id === columnId)
+  
+  // Combine users for select
+  const allUsers = [...projectUsers]
+  if (currentUser && !allUsers.find(u => u.id === currentUser.id)) {
+    allUsers.push(currentUser)
+  }
+  const selectedUser = allUsers.find(u => u.id === assignedTo)
+
   return (
-    <div className="modal-backdrop">
-      <div className="modal">
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
         <h3>Создать задачу</h3>
         <form onSubmit={handleSubmit}>
           <div className="form-row">
             <label>Название</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} autoFocus placeholder="Название задачи" />
+            <input 
+              className="form-input"
+              value={title} 
+              onChange={e => setTitle(e.target.value)} 
+              autoFocus 
+              placeholder="Название задачи" 
+            />
           </div>
 
           <div className="form-row">
             <label>Описание (необязательно)</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Описание задачи" rows={3}></textarea>
+            <textarea 
+              className="form-textarea"
+              value={description} 
+              onChange={e => setDescription(e.target.value)} 
+              placeholder="О чем эта задача?" 
+              rows={4}
+            ></textarea>
           </div>
 
           <div className="form-row">
             <label>Колонка</label>
-            <select value={columnId} onChange={e => setColumnId(parseInt(e.target.value, 10))}>
-              {columns.map(col => (
-                <option key={col.id} value={col.id}>{col.name}</option>
-              ))}
-            </select>
+            <div className="custom-select-container">
+              <div 
+                className={`custom-select-trigger ${colDropdownOpen ? 'active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); setColDropdownOpen(!colDropdownOpen); setUserDropdownOpen(false); }}
+              >
+                <span>{selectedColumn?.name || 'Выберите колонку'}</span>
+                <div className="select-arrow"></div>
+              </div>
+              {colDropdownOpen && (
+                <div className="custom-select-options">
+                  {columns.map(col => (
+                    <div 
+                      key={col.id} 
+                      className={`custom-select-option ${col.id === columnId ? 'selected' : ''}`}
+                      onClick={() => { setColumnId(col.id); setColDropdownOpen(false); }}
+                    >
+                      {col.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="form-row">
             <label>Исполнитель</label>
-            <select 
-              value={assignedTo || ''} 
-              onChange={e => setAssignedTo(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-            >
-              {projectUsers.map(u => (
-                <option key={u.id} value={u.id}>
-                  {(() => {
-                    const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ');
-                    return fullName || u.email;
-                  })()}
-                </option>
-              ))}
-              {/* Fallback if list is empty or current user not in list (should not happen usually but safe) */}
-               {!projectUsers.find(u => u.id === currentUser?.id) && currentUser && (
-                 <option value={currentUser.id}>Я ({currentUser.email})</option>
-               )}
-            </select>
+            <div className="custom-select-container">
+              <div 
+                className={`custom-select-trigger ${userDropdownOpen ? 'active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); setUserDropdownOpen(!userDropdownOpen); setColDropdownOpen(false); }}
+              >
+                <span>
+                  {selectedUser ? 
+                    ([selectedUser.first_name, selectedUser.last_name].filter(Boolean).join(' ') || selectedUser.email) 
+                    : 'Не назначен'}
+                </span>
+                <div className="select-arrow"></div>
+              </div>
+              {userDropdownOpen && (
+                <div className="custom-select-options">
+                  {allUsers.map(u => (
+                    <div 
+                      key={u.id} 
+                      className={`custom-select-option ${u.id === assignedTo ? 'selected' : ''}`}
+                      onClick={() => { setAssignedTo(u.id); setUserDropdownOpen(false); }}
+                    >
+                      {[u.first_name, u.last_name].filter(Boolean).join(' ') || u.email}
+                      {u.id === currentUser?.id && ' (Я)'}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          {error && <div className="error">{error}</div>}
+          {error && <div className="error" style={{ marginBottom: '16px' }}>{error}</div>}
           <div className="modal-actions">
-            <button type="button" onClick={onClose} disabled={loading}>Отмена</button>
-            <button type="submit" disabled={loading}>{loading ? 'Создание...' : 'Создать'}</button>
+            <button type="button" className="btn secondary" onClick={onClose} disabled={loading}>Отмена</button>
+            <button type="submit" className="btn" disabled={loading}>{loading ? 'Создание...' : 'Создать'}</button>
           </div>
         </form>
       </div>

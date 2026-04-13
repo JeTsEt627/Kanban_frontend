@@ -2,6 +2,31 @@ import React, { useState, useEffect, useRef } from 'react'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
+function formatError(err: any) {
+  try {
+    if (!err) return ''
+    const resp = err.response?.data || err
+    if (typeof resp === 'string') return resp
+    if (resp?.detail) {
+      if (typeof resp.detail === 'string') return resp.detail
+      if (Array.isArray(resp.detail)) {
+        return resp.detail.map((d: any) => {
+          if (typeof d === 'string') return d
+          if (d?.msg) return `${(d.loc || []).join('.')} : ${d.msg}`
+          return JSON.stringify(d)
+        }).join('; ')
+      }
+      return JSON.stringify(resp.detail)
+    }
+    if (Array.isArray(resp)) {
+      return resp.map((d: any) => (d?.msg ? `${(d.loc||[]).join('.')} : ${d.msg}` : JSON.stringify(d))).join('; ')
+    }
+    return JSON.stringify(resp)
+  } catch (e) {
+    return String(err)
+  }
+}
+
 type ProjectUser = { id: number; email: string; first_name?: string; last_name?: string }
 type Task = { 
     id: number; 
@@ -13,6 +38,10 @@ type Task = {
     created_at?: string;
     assigned_to?: number;
     created_by?: number;
+    parent_id?: number;
+    subtasks?: Task[];
+    is_finished?: boolean;
+    parent?: { id: number; title: string; is_finished: boolean }
 }
 
 type TaskLog = {
@@ -21,12 +50,7 @@ type TaskLog = {
     message: string;
     created_at: string;
     user_id?: number;
-    user?: {
-        id: number;
-        first_name: string;
-        last_name: string;
-        email: string;
-    }
+    user?: { id: number; first_name: string; last_name: string; email: string; }
 }
 
 type Props = {
@@ -35,10 +59,11 @@ type Props = {
   task: Task | null
   onUpdate: (updatedTask: Task) => void
   onDelete: (taskId: number) => void
+  onNavigate: (taskId: number) => void
   projectUsers: ProjectUser[]
 }
 
-export default function TaskDetailsModal({ open, onClose, task, onUpdate, onDelete, projectUsers }: Props) {
+export default function TaskDetailsModal({ open, onClose, task, onUpdate, onDelete, onNavigate, projectUsers }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [assignedTo, setAssignedTo] = useState<number | undefined>(undefined)
@@ -46,21 +71,37 @@ export default function TaskDetailsModal({ open, onClose, task, onUpdate, onDele
   const [isEditing, setIsEditing] = useState(false)
   const [logs, setLogs] = useState<TaskLog[]>([])
   const [newComment, setNewComment] = useState('')
-  const { user } = useAuth()
+  const [subtasks, setSubtasks] = useState<Task[]>([])
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
+  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<number | undefined>(undefined)
+  const [activeDropdown, setOpenDropdown] = useState<string | null>(null)
+  
+  const { user: currentUser } = useAuth()
   const logsContainerRef = useRef<HTMLDivElement>(null)
-  const modalContentRef = useRef<HTMLDivElement>(null) // Ref for the modal content
+  const modalContentRef = useRef<HTMLDivElement>(null)
+
+  const fetchFullTask = async (id: number) => {
+      try {
+          const res = await api.get(`/tasks/${id}`)
+          if (res.data.subtasks) setSubtasks(res.data.subtasks)
+          if (res.data.parent && task) task.parent = res.data.parent
+      } catch (e) { console.error(e) }
+  }
 
   useEffect(() => {
-    if (task) {
+    if (task && open) {
       setTitle(task.title)
       setDescription(task.description || '')
       setAssignedTo(task.assigned_to)
-      setIsEditing(false) // Reset editing state when opening new task
+      setIsEditing(false)
+      setSubtasks(task.subtasks || [])
+      setNewSubtaskAssignee(currentUser?.id)
       
-      // Fetch logs
       api.get(`/task-logs/?task_id=${task.id}`)
         .then(res => setLogs(res.data))
         .catch(console.error)
+
+      fetchFullTask(task.id)
     }
   }, [task, open])
 
@@ -70,22 +111,18 @@ export default function TaskDetailsModal({ open, onClose, task, onUpdate, onDele
       }
   }, [logs])
 
-  // Global event listener to close modal if click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (modalContentRef.current && !modalContentRef.current.contains(event.target as Node)) {
         onClose();
       }
+      if (!(event.target as HTMLElement).closest('.custom-select-container')) {
+        setOpenDropdown(null);
+      }
     };
-
-    if (open) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [open, onClose]); // Re-run if modal open state or onClose function changes
+    if (open) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open, onClose]);
 
   const handleAddComment = async () => {
       if (!newComment.trim() || !task) return
@@ -93,177 +130,256 @@ export default function TaskDetailsModal({ open, onClose, task, onUpdate, onDele
           const res = await api.post('/task-logs/', { task_id: task.id, message: newComment })
           setLogs([...logs, res.data])
           setNewComment('')
-      } catch (e) {
-          console.error(e)
-          alert("Ошибка добавления комментария")
-      }
+      } catch (e) { alert("Ошибка добавления комментария") }
   }
 
-
-  if (!open || !task) return null
-
-  const handleSave = async () => {
-    setLoading(true)
-    try {
-      const payload: any = { title, description: description || null }
-      if (assignedTo !== undefined) {
-          payload.assigned_to = assignedTo
-      }
-      
-      const res = await api.put(`/tasks/${task.id}`, payload)
-      onUpdate(res.data)
-      setIsEditing(false)
-    } catch (e) {
-      console.error(e)
-      alert("Ошибка сохранения")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleDelete = async () => {
-      if (!window.confirm("Удалить задачу?")) return
-      setLoading(true)
+  const handleAddSubtask = async () => {
+      if (!newSubtaskTitle.trim() || !task) return
       try {
-          await api.delete(`/tasks/${task.id}`)
-          onDelete(task.id)
-          onClose()
-      } catch(e) {
-          console.error(e)
-          alert("Ошибка удаления")
-      } finally {
-          setLoading(false)
-      }
+          await api.post('/tasks', {
+              title: newSubtaskTitle,
+              column_id: task.column_id,
+              parent_id: task.id,
+              assigned_to: newSubtaskAssignee,
+              description: ""
+          })
+          fetchFullTask(task.id)
+          setNewSubtaskTitle('')
+      } catch (e) { alert(formatError(e) || "Ошибка добавления подзадачи") }
+  }
+
+  const toggleSubtaskFinished = async (st: Task) => {
+      try {
+          await api.put(`/tasks/${st.id}`, { is_finished: !st.is_finished })
+          if (task) fetchFullTask(task.id)
+      } catch (e) { console.error(e) }
+  }
+
+  const handleUpdateSubtaskAssignee = async (stId: number, assigneeId: number) => {
+      try {
+          await api.put(`/tasks/${stId}`, { assigned_to: assigneeId })
+          if (task) fetchFullTask(task.id)
+      } catch (e) { alert("Ошибка обновления исполнителя") }
   }
 
   const getUserName = (userId?: number) => {
       if (!userId) return 'Не назначен'
       const u = projectUsers.find(u => u.id === userId)
       if (!u) return 'Неизвестный'
-      const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ')
-      return fullName || u.email
+      return [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email
   }
-  
-  const getLogAuthorName = (log: TaskLog) => {
-      if (log.user) {
-          const fullName = [log.user.first_name, log.user.last_name].filter(Boolean).join(' ')
-          return fullName || log.user.email
-      }
-      return 'Неизвестный'
+
+  const handleSave = async () => {
+    setLoading(true)
+    try {
+      const payload: any = { title, description: description || "" }
+      if (assignedTo !== undefined) payload.assigned_to = assignedTo
+      const res = await api.put(`/tasks/${task!.id}`, payload)
+      onUpdate(res.data)
+      setIsEditing(false)
+    } catch (e) { alert("Ошибка сохранения") }
+    finally { setLoading(false) }
+  }
+
+  const handleDelete = async () => {
+      if (!window.confirm("Удалить задачу?")) return
+      setLoading(true)
+      try {
+          await api.delete(`/tasks/${task!.id}`)
+          onDelete(task!.id)
+          onClose()
+      } catch(e) { alert("Ошибка удаления") }
+      finally { setLoading(false) }
   }
 
   const formatMoscowTime = (dateString: string) => {
-      // Ensure the date is treated as UTC if it doesn't have timezone info
       const dateStr = dateString.endsWith('Z') ? dateString : `${dateString}Z`;
       const date = new Date(dateStr);
       return date.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
   }
 
+  if (!open || !task) return null
+
   return (
-    <div className="modal-backdrop">
-      <div ref={modalContentRef} className="modal" style={{maxWidth: '900px', width: '95%', height: '80vh', display: 'flex', flexDirection: 'column'}}>
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px', flexShrink: 0}}>
-            {isEditing ? (
-                <input 
-                    value={title} 
-                    onChange={e => setTitle(e.target.value)} 
-                    className="form-input-title"
-                />
-            ) : (
-                <h3 style={{margin: 0, flex: 1}}>{task.title}</h3>
+    <div className="drawer-backdrop">
+      <div ref={modalContentRef} className="drawer-content">
+        {/* Breadcrumbs */}
+        <div style={{fontSize: '13px', color: '#94a3b8', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px'}}>
+            <span style={{cursor: 'pointer'}} onClick={onClose}>Доска</span>
+            {task.parent && (
+                <>
+                    <span>/</span>
+                    <span style={{cursor: 'pointer', color: '#0ea5a4', fontWeight: '500'}} onClick={() => onNavigate(task.parent!.id)}>
+                        {task.parent.title}
+                    </span>
+                </>
             )}
-            <button onClick={onClose} style={{background: 'transparent', border: 'none', fontSize: '1.2em', cursor: 'pointer'}}>&times;</button>
+            <span>/</span>
+            <span style={{fontWeight: '600', color: '#475569'}}>{task.title}</span>
         </div>
 
-        <div style={{display: 'flex', gap: '24px', flex: 1, overflow: 'hidden'}}>
-            {/* Left Column: Details */}
-            <div style={{flex: 1, overflowY: 'auto', paddingRight: '12px'}}>
-                <div style={{marginBottom: '16px'}}>
-                    <label style={{fontSize: '0.85em', color: '#64748b'}}>Исполнитель</label>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '24px', flexShrink: 0}}>
+            {isEditing ? (
+                <input value={title} onChange={e => setTitle(e.target.value)} className="form-input-title" />
+            ) : (
+                <h3 style={{margin: 0, flex: 1, fontSize: '24px', fontWeight: '700'}}>{task.title}</h3>
+            )}
+            <button onClick={onClose} style={{background: 'transparent', border: 'none', fontSize: '1.5em', cursor: 'pointer', color: '#94a3b8'}}>&times;</button>
+        </div>
+
+        <div style={{display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, overflowY: 'auto', paddingRight: '4px'}}>
+            {/* Main Info */}
+            <div style={{display: 'flex', gap: '32px', borderBottom: '1px solid #f1f5f9', paddingBottom: '24px'}}>
+                <div style={{flex: 1}}>
+                    <label style={{fontSize: '0.75em', fontWeight: '700', textTransform: 'uppercase', color: '#94a3b8', display: 'block', marginBottom: '8px'}}>Исполнитель</label>
                     {isEditing ? (
-                                                    <select 
-                                                        value={assignedTo || ''} 
-                                                        onChange={e => setAssignedTo(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-                                                        className="form-select"
-                                                        style={{marginTop: '4px'}}
-                                                    >
-                                                        {projectUsers.map(u => (
-                                                            <option key={u.id} value={u.id}>
-                                                            {(() => {
-                                                                const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ');
-                                                                return fullName || u.email;
-                                                            })()}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                ) : (
-                                                    <div style={{marginTop: '4px', fontWeight: '500'}}>{getUserName(task.assigned_to)}</div>
-                                                )}
-                                            </div>
-                        
-                                            <div style={{marginBottom: '24px'}}>
-                                                <label style={{fontSize: '0.85em', color: '#64748b'}}>Описание</label>
-                                                {isEditing ? (
-                                                    <textarea 
-                                                        value={description} 
-                                                        onChange={e => setDescription(e.target.value)} 
-                                                        rows={15}
-                                                        className="form-textarea no-resize"
-                                                        style={{marginTop: '4px'}}
-                                                    />
-                                                ) : (                        <div style={{marginTop: '4px', whiteSpace: 'pre-wrap', lineHeight: '1.5'}}>{task.description || 'Нет описания'}</div>
+                        <select value={assignedTo || ''} onChange={e => setAssignedTo(e.target.value ? parseInt(e.target.value, 10) : undefined)} className="form-select">
+                            {projectUsers.map(u => (
+                                <option key={u.id} value={u.id}>{[u.first_name, u.last_name].filter(Boolean).join(' ') || u.email}</option>
+                            ))}
+                        </select>
+                    ) : (
+                        <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                            <div style={{width: '24px', height: '24px', borderRadius: '50%', background: '#0ea5a4', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 'bold'}}>
+                                {getUserName(task.assigned_to).charAt(0).toUpperCase()}
+                            </div>
+                            <span style={{fontWeight: '500'}}>{getUserName(task.assigned_to)}</span>
+                        </div>
                     )}
+                </div>
+                <div style={{flex: 1}}>
+                    <label style={{fontSize: '0.75em', fontWeight: '700', textTransform: 'uppercase', color: '#94a3b8', display: 'block', marginBottom: '8px'}}>Создано</label>
+                    <div style={{color: '#475569', fontSize: '14px'}}>{task.created_at ? formatMoscowTime(task.created_at) : '-'}</div>
                 </div>
             </div>
 
-            {/* Right Column: Comments */}
-            <div style={{flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #e2e8f0', paddingLeft: '24px'}}>
-                <h4 style={{margin: '0 0 16px 0'}}>Комментарии</h4>
-                
-                <div ref={logsContainerRef} style={{flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px'}}>
-                    {logs.length === 0 && <div style={{color: '#94a3b8', fontStyle: 'italic'}}>Нет комментариев</div>}
-                    {logs.map(log => {
-                        const isMyComment = user && log.user_id === user.id
-                        return (
-                            <div key={log.id} style={{
-                                background: isMyComment ? '#e0f2fe' : '#f1f5f9', 
-                                padding: '8px 12px', 
-                                borderRadius: '8px',
-                                alignSelf: isMyComment ? 'flex-end' : 'flex-start',
-                                maxWidth: '90%',
-                                minWidth: '60%'
-                            }}>
-                                <div style={{fontSize: '0.75em', color: '#64748b', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', gap: '8px'}}>
-                                    <span style={{fontWeight: 'bold'}}>{getLogAuthorName(log)}</span>
-                                    <span>{formatMoscowTime(log.created_at)}</span>
+            {/* Description */}
+            <div>
+                <label style={{fontSize: '0.75em', fontWeight: '700', textTransform: 'uppercase', color: '#94a3b8', display: 'block', marginBottom: '12px'}}>Описание</label>
+                {isEditing ? (
+                    <textarea value={description} onChange={e => setDescription(e.target.value)} rows={6} className="form-textarea" placeholder="Добавьте описание задачи..." />
+                ) : (
+                    <div style={{color: '#1e293b', lineHeight: '1.6', fontSize: '15px', whiteSpace: 'pre-wrap'}}>
+                        {task.description || <span style={{color: '#94a3b8', fontStyle: 'italic'}}>Нет описания</span>}
+                    </div>
+                )}
+            </div>
+
+            {/* Subtasks */}
+            <div>
+                <label style={{fontSize: '0.75em', fontWeight: '700', textTransform: 'uppercase', color: '#94a3b8', display: 'block', marginBottom: '12px'}}>Подзадачи ({subtasks.length})</label>
+                <div style={{display: 'flex', flexDirection: 'column', gap: '2px'}}>
+                    {subtasks.map(st => (
+                        <div key={st.id} className="subtask-row" style={{border: 'none', background: 'transparent', padding: '4px 0'}}>
+                            <input 
+                                type="checkbox" 
+                                checked={!!st.is_finished} 
+                                onChange={(e) => { e.stopPropagation(); toggleSubtaskFinished(st); }}
+                                style={{cursor: 'pointer'}}
+                            />
+                            <span 
+                                style={{
+                                    flex: 1, 
+                                    fontSize: '14px', 
+                                    cursor: 'pointer',
+                                    textDecoration: st.is_finished ? 'line-through' : 'none', 
+                                    color: st.is_finished ? '#94a3b8' : '#1e293b'
+                                }}
+                                onClick={() => onNavigate(st.id)}
+                            >
+                                {st.title}
+                            </span>
+                            
+                            {/* Custom Inline Assignee Selection */}
+                            <div className="custom-select-container" style={{ width: 'auto' }}>
+                                <div 
+                                    className={`user-badge-compact ${activeDropdown === 'st-' + st.id ? 'active' : ''}`}
+                                    onClick={() => setOpenDropdown(activeDropdown === 'st-' + st.id ? null : 'st-' + st.id)}
+                                >
+                                    {[getUserName(st.assigned_to).split(' ')[0], getUserName(st.assigned_to).split(' ')[1]?.charAt(0)].filter(Boolean).join(' ')}
                                 </div>
-                                <div style={{fontSize: '0.9em', wordWrap: 'break-word'}}>{log.message}</div>
+                                {activeDropdown === 'st-' + st.id && (
+                                    <div className="custom-select-options" style={{ right: 0, left: 'auto', minWidth: '200px' }}>
+                                        {projectUsers.map(u => (
+                                            <div 
+                                                key={u.id} 
+                                                className={`custom-select-option ${u.id === st.assigned_to ? 'selected' : ''}`}
+                                                onClick={() => { handleUpdateSubtaskAssignee(st.id, u.id); setOpenDropdown(null); }}
+                                            >
+                                                {[u.first_name, u.last_name].filter(Boolean).join(' ') || u.email}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                
+                {/* Improved Creation Group */}
+                <div className="subtask-input-group" style={{marginTop: '12px'}}>
+                    <input 
+                        value={newSubtaskTitle}
+                        onChange={e => setNewSubtaskTitle(e.target.value)}
+                        placeholder="Что нужно сделать?"
+                        className="form-input"
+                        style={{flex: 1, border: 'none', background: 'transparent', padding: '4px 0'}}
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddSubtask() }}
+                    />
+                    <div style={{display: 'flex', gap: '8px', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '8px', marginTop: '4px'}}>
+                        <div className="custom-select-container" style={{ flex: 1 }}>
+                            <div 
+                                className={`custom-select-trigger mini ${activeDropdown === 'new' ? 'active' : ''}`}
+                                onClick={() => setOpenDropdown(activeDropdown === 'new' ? null : 'new')}
+                            >
+                                <span style={{ fontSize: '13px' }}>{getUserName(newSubtaskAssignee)}</span>
+                                <div className="select-arrow"></div>
+                            </div>
+                            {activeDropdown === 'new' && (
+                                <div className="custom-select-options" style={{ bottom: 'calc(100% + 8px)', top: 'auto' }}>
+                                    {projectUsers.map(u => (
+                                        <div 
+                                            key={u.id} 
+                                            className={`custom-select-option ${u.id === newSubtaskAssignee ? 'selected' : ''}`}
+                                            onClick={() => { setNewSubtaskAssignee(u.id); setOpenDropdown(null); }}
+                                        >
+                                            {[u.first_name, u.last_name].filter(Boolean).join(' ') || u.email}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <button className="btn" onClick={() => handleAddSubtask()} disabled={!newSubtaskTitle.trim()} style={{padding: '6px 16px', height: '34px', fontSize: '13px', fontWeight: '600'}}>Добавить</button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Comments */}
+            <div style={{marginTop: 'auto', borderTop: '1px solid #f1f5f9', paddingTop: '24px'}}>
+                <label style={{fontSize: '0.75em', fontWeight: '700', textTransform: 'uppercase', color: '#94a3b8', display: 'block', marginBottom: '16px'}}>Комментарии ({logs.length})</label>
+                <div ref={logsContainerRef} style={{maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px', paddingRight: '8px'}}>
+                    {logs.map(log => {
+                        const isMyComment = currentUser && log.user_id === currentUser.id
+                        const author = log.user ? ([log.user.first_name, log.user.last_name].filter(Boolean).join(' ') || log.user.email) : 'Система'
+                        return (
+                            <div key={log.id} style={{alignSelf: isMyComment ? 'flex-end' : 'flex-start', maxWidth: '85%'}}>
+                                <div style={{fontSize: '11px', color: '#94a3b8', marginBottom: '4px', textAlign: isMyComment ? 'right' : 'left'}}>
+                                    <span style={{fontWeight: '700', color: '#64748b'}}>{author}</span> • {formatMoscowTime(log.created_at)}
+                                </div>
+                                <div style={{background: isMyComment ? '#0ea5a4' : '#f1f5f9', color: isMyComment ? 'white' : '#1e293b', padding: '10px 14px', borderRadius: isMyComment ? '14px 14px 2px 14px' : '14px 14px 14px 2px', fontSize: '14px'}}>{log.message}</div>
                             </div>
                         )
                     })}
                 </div>
-
                 <div style={{display: 'flex', gap: '8px'}}>
-                    <input 
-                        value={newComment}
-                        onChange={e => setNewComment(e.target.value)}
-                        placeholder="Написать комментарий..."
-                        className="form-input"
-                        onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                                handleAddComment()
-                            }
-                        }}
-                    />
+                    <input value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Напишите сообщение..." className="form-input" onKeyDown={e => { if (e.key === 'Enter') handleAddComment() }} />
                     <button className="btn" onClick={handleAddComment} disabled={!newComment.trim()} style={{padding: '0 16px'}}>&#10148;</button>
                 </div>
             </div>
         </div>
 
-        <div className="modal-actions" style={{justifyContent: 'space-between', marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '16px'}}>
-            <div>
-                <button className="btn secondary" onClick={handleDelete} style={{color: '#b91c1c', borderColor: '#b91c1c'}}>Удалить</button>
-            </div>
+        <div className="modal-actions" style={{justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: '20px', backgroundColor: 'white'}}>
+            <button className="btn secondary" onClick={handleDelete} style={{color: '#ef4444', borderColor: '#fee2e2'}}>Удалить</button>
             <div style={{display: 'flex', gap: '8px'}}>
                 {isEditing ? (
                     <>
