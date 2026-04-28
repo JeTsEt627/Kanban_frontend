@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import Sidebar from '../components/Sidebar'
 import api from '../api/client'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import CreateProjectModal from '../components/CreateProjectModal'
 import DeleteProjectModal from '../components/DeleteProjectModal'
 import { useAuth } from '../context/AuthContext'
+import Toast from '../components/Toast'
 
 type Project = { 
   id: number; 
@@ -20,7 +21,17 @@ export default function Dashboard() {
   const [createOpen, setCreateOpen] = useState(false)
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
   const { user, logout } = useAuth()
+  const location = useLocation()
+
+  useEffect(() => {
+    const msg = (location.state as any)?.toast
+    if (msg) {
+      setToast(msg)
+      window.history.replaceState({}, '')
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -135,13 +146,14 @@ export default function Dashboard() {
         </section>
       </main>
       <CreateProjectModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={handleCreated} />
-      <DeleteProjectModal 
-        open={!!projectToDelete} 
-        onClose={() => setProjectToDelete(null)} 
-        onConfirm={handleConfirmDelete} 
-        projectName={projectToDelete?.name || ''} 
+      <DeleteProjectModal
+        open={!!projectToDelete}
+        onClose={() => setProjectToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        projectName={projectToDelete?.name || ''}
         loading={deleteLoading}
       />
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
   )
 }

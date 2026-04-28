@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import Sidebar from '../components/Sidebar'
 import CreateTaskModal from '../components/CreateTaskModal'
@@ -9,10 +9,11 @@ import AddUserModal from '../components/AddUserModal'
 import '../index.css'
 
 type Column = { id: number; name: string; position: number }
-type Task = { id: number; title: string; description?: string; column_id?: number; priority?: string; position: number; parent_id?: number | null }
+type Task = { id: number; title: string; description?: string; column_id?: number; priority?: string; position: number; parent_id?: number | null; is_finished?: boolean }
 
 export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const navigate = useNavigate()
   const [project, setProject] = useState<any>(null)
   const [columns, setColumns] = useState<Column[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
@@ -23,6 +24,7 @@ export default function ProjectPage() {
   const [addUserModalOpen, setAddUserModalOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const dragPreviewRef = React.useRef<{ element: HTMLElement, offsetX: number, offsetY: number } | null>(null)
+  const boardRef = React.useRef<HTMLDivElement>(null)
 
   const refreshData = async () => {
     if (!projectId) return
@@ -35,7 +37,16 @@ export default function ProjectPage() {
       setProject(pRes.data)
       setColumns((cRes.data || []).sort((a: Column, b: Column) => a.position - b.position))
       setTasks((tRes.data || []).sort((a: Task, b: Task) => a.position - b.position))
-    } catch (err) { console.error(err) }
+    } catch (err: any) {
+      const status = err?.response?.status
+      if (status === 403) {
+        navigate('/dashboard', { replace: true, state: { toast: 'У вас нет доступа к этому проекту' } })
+      } else if (status === 404) {
+        navigate('/dashboard', { replace: true, state: { toast: 'Проект не найден' } })
+      } else {
+        console.error(err)
+      }
+    }
   }
 
   useEffect(() => {
@@ -58,6 +69,14 @@ export default function ProjectPage() {
       if (selectedTask && selectedTask.id === updatedTask.id) {
           setSelectedTask(updatedTask)
       }
+  }
+
+  const handleToggleFinished = async (e: React.MouseEvent, task: Task) => {
+    e.stopPropagation()
+    try {
+      const res = await api.put(`/tasks/${task.id}`, { is_finished: !task.is_finished })
+      handleTaskUpdated(res.data)
+    } catch (err) { console.error(err) }
   }
 
   const handleTaskDeleted = (taskId: number) => {
@@ -101,11 +120,27 @@ export default function ProjectPage() {
     window.addEventListener('dragend', cleanupDrag, { once: true })
   }
 
-  const handleDrag = (e: React.DragEvent) => {
-    if (dragPreviewRef.current && e.clientX !== 0) {
-      dragPreviewRef.current.element.style.left = `${e.clientX - dragPreviewRef.current.offsetX}px`
-      dragPreviewRef.current.element.style.top = `${e.clientY - dragPreviewRef.current.offsetY}px`
+  useEffect(() => {
+    const onDocDragOver = (e: DragEvent) => {
+      if (!dragPreviewRef.current) return
+      const board = boardRef.current
+      if (!board) return
+      const ZONE = 120
+      const SPEED = 10
+      if (e.clientX < ZONE) {
+        board.scrollLeft -= SPEED
+      } else if (e.clientX > window.innerWidth - ZONE) {
+        board.scrollLeft += SPEED
+      }
     }
+    document.addEventListener('dragover', onDocDragOver)
+    return () => document.removeEventListener('dragover', onDocDragOver)
+  }, [])
+
+  const handleDrag = (e: React.DragEvent) => {
+    if (e.clientX === 0 || !dragPreviewRef.current) return
+    dragPreviewRef.current.element.style.left = `${e.clientX - dragPreviewRef.current.offsetX}px`
+    dragPreviewRef.current.element.style.top = `${e.clientY - dragPreviewRef.current.offsetY}px`
   }
 
   const handleDrop = async (e: React.DragEvent, targetColumnId: number) => {
@@ -144,15 +179,26 @@ export default function ProjectPage() {
           </div>
         </header>
 
-        <div className="kanban-board">
+        <div className="kanban-board" ref={boardRef}>
           {columns.map(col => (
             <div key={col.id} className="kanban-column" onDragOver={e => e.preventDefault()} onDrop={e => handleDrop(e, col.id)}>
               <h3 className="column-header">{col.name}</h3>
               <div className="column-content">
                 {tasks.filter(t => t.column_id === col.id && !t.parent_id).map(task => (
-                  <div key={task.id} className="task-card" draggable onDragStart={e => handleDragStart(e, task.id)} onDrag={handleDrag} onClick={() => setSelectedTask(task)}>
-                    <div className="task-title">{task.title}</div>
-                    {task.description && <div className="task-desc">{task.description}</div>}
+                  <div key={task.id} className={`task-card${task.is_finished ? ' task-finished' : ''}`} draggable onDragStart={e => handleDragStart(e, task.id)} onDrag={handleDrag} onClick={() => setSelectedTask(task)}>
+                    <div style={{display: 'flex', alignItems: 'flex-start', gap: '8px'}}>
+                      <button
+                        className={`task-check-btn${task.is_finished ? ' checked' : ''}`}
+                        onClick={e => handleToggleFinished(e, task)}
+                        title={task.is_finished ? 'Снять отметку' : 'Отметить выполненной'}
+                      >
+                        {task.is_finished && '✓'}
+                      </button>
+                      <div style={{flex: 1, minWidth: 0}}>
+                        <div className="task-title" style={{textDecoration: task.is_finished ? 'line-through' : 'none', color: task.is_finished ? '#94a3b8' : undefined}}>{task.title}</div>
+                        {task.description && <div className="task-desc">{task.description}</div>}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

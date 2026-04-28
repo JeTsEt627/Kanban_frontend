@@ -2,7 +2,11 @@
   --bg: #f6f8fa;
   --text: #0f172a;
 }
-html,body,#root{height:100%;}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+html,body,#root{height:100%;overflow:hidden;}
 body{
   margin:0;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
@@ -57,7 +61,7 @@ header h1{margin:0 0 12px 0}
 .auth-link{color:#2563eb;text-decoration:none;margin-left:8px}
 
 /* Layout */
-.app-layout{display:flex;min-height:100vh}
+.app-layout{display:flex;height:100vh;overflow:hidden;}
 .sidebar{
   width:220px;
   background:#0f172a;
@@ -134,7 +138,10 @@ header h1{margin:0 0 12px 0}
 
 .main-area{
   flex:1;
-  padding:24px;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  padding:24px 24px 0 24px;
   background:var(--bg);
   margin-left: 220px;
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -142,7 +149,7 @@ header h1{margin:0 0 12px 0}
 .sidebar.collapsed + .main-area {
   margin-left: 64px;
 }
-.main-header{display:flex;align-items:center;justify-content:space-between}
+.main-header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .boards-list{margin-top:18px}
 .projects-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;list-style:none;padding:0}
 .project-card{background:white;padding:16px;border-radius:8px;box-shadow:0 6px 20px rgba(16,24,40,0.04)}
@@ -163,14 +170,31 @@ header h1{margin:0 0 12px 0}
 
 .drawer-content {
   background: white;
-  width: 600px; /* Фиксированная ширина как в Lark */
+  width: 600px;
   height: 100vh;
+  box-sizing: border-box;
   box-shadow: -10px 0 40px rgba(0, 0, 0, 0.1);
   padding: 32px;
   display: flex;
   flex-direction: column;
   animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
+  overflow: hidden;
+}
+
+.drawer-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  background: transparent;
+  transition: background 0.2s;
+  z-index: 10;
+}
+.drawer-resize-handle:hover {
+  background: rgba(14, 165, 164, 0.3);
 }
 
 @keyframes slideInRight {
@@ -210,6 +234,9 @@ header h1{margin:0 0 12px 0}
   border-radius: 16px;
   width: 480px;
   max-width: 90%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   animation: slideUp 0.3s ease-out;
 }
@@ -238,7 +265,8 @@ header h1{margin:0 0 12px 0}
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 32px;
+  margin-top: 24px;
+  flex-shrink: 0;
 }
 
 .modal-actions .btn {
@@ -299,15 +327,20 @@ header h1{margin:0 0 12px 0}
   gap: 12px;
 }
 
+.hide-scrollbar { scrollbar-width: none; }
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+
 /* Kanban Board */
 .kanban-board {
   display: flex;
   gap: 24px;
   overflow-x: auto;
-  padding-bottom: 24px;
+  overflow-y: hidden;
+  padding-bottom: 16px;
   margin-top: 24px;
-  height: 100%;
-  align-items: flex-start;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
 }
 
 .kanban-column.is-dragover {
@@ -322,8 +355,8 @@ header h1{margin:0 0 12px 0}
   border-radius: 12px;
   display: flex;
   flex-direction: column;
-  max-height: 100%;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .column-header {
@@ -337,13 +370,15 @@ header h1{margin:0 0 12px 0}
 
 .column-content {
   padding: 12px;
-  overflow-y: auto;
-  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 100px; /* Drop target area */
+  min-height: 100px;
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: none;
 }
+.column-content::-webkit-scrollbar { display: none; }
 
 .task-card {
   background: white;
@@ -366,7 +401,38 @@ header h1{margin:0 0 12px 0}
 }
 
 .task-card.is-dragging {
-  opacity: 0; /* Hide the original element so it looks like it's being moved */
+  opacity: 0;
+}
+
+.task-card.task-finished {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.task-check-btn {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  border-radius: 50%;
+  border: 2px solid #cbd5e1;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: white;
+  padding: 0;
+  margin-top: 2px;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+.task-check-btn:hover {
+  border-color: #0ea5a4;
+}
+.task-check-btn.checked {
+  background: #0ea5a4;
+  border-color: #0ea5a4;
 }
 
 .task-title {
@@ -510,7 +576,7 @@ header h1{margin:0 0 12px 0}
 }
 
 .form-textarea {
-  resize: vertical;
+  resize: none;
   min-height: 100px;
 }
 
@@ -536,6 +602,27 @@ header h1{margin:0 0 12px 0}
 .subtask-row:hover {
   border-color: #2563eb;
   background: #f1f5f9;
+}
+
+.comment-actions {
+  display: none;
+  gap: 4px;
+}
+.comment-row:hover .comment-actions {
+  display: inline-flex;
+}
+.comment-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 13px;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.comment-action-btn:hover {
+  color: #475569;
 }
 
 .subtask-nested {

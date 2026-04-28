@@ -126,10 +126,10 @@ export default function CreateTaskModal({ open, onClose, onCreated, projectId, c
   const selectedUser = allUsers.find(u => u.id === assignedTo)
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop">
+      <div className="modal">
         <h3>Создать задачу</h3>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} style={{display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0}}>
           <div className="form-row">
             <label>Название</label>
             <input 

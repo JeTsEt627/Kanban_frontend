@@ -28,14 +28,15 @@ function formatError(err: any) {
 }
 
 type ProjectUser = { id: number; email: string; first_name?: string; last_name?: string }
-type Task = { 
-    id: number; 
-    title: string; 
-    description?: string; 
-    column_id: number; 
-    priority?: string; 
+type Task = {
+    id: number;
+    title: string;
+    description?: string;
+    column_id: number;
+    priority?: string;
     position: number;
     created_at?: string;
+    finished_at?: string;
     assigned_to?: number;
     created_by?: number;
     parent_id?: number;
@@ -75,10 +76,33 @@ export default function TaskDetailsModal({ open, onClose, task, onUpdate, onDele
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<number | undefined>(undefined)
   const [activeDropdown, setOpenDropdown] = useState<string | null>(null)
-  
+  const [editingLogId, setEditingLogId] = useState<number | null>(null)
+  const [editingLogText, setEditingLogText] = useState('')
+  const [drawerWidth, setDrawerWidth] = useState(600)
+
   const { user: currentUser } = useAuth()
   const logsContainerRef = useRef<HTMLDivElement>(null)
   const modalContentRef = useRef<HTMLDivElement>(null)
+  const isResizing = useRef(false)
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    isResizing.current = true
+    const startX = e.clientX
+    const startWidth = drawerWidth
+    const onMove = (ev: MouseEvent) => {
+      if (!isResizing.current) return
+      const delta = startX - ev.clientX
+      setDrawerWidth(Math.min(1200, Math.max(400, startWidth + delta)))
+    }
+    const onUp = () => {
+      isResizing.current = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
   const fetchFullTask = async (id: number) => {
       try {
@@ -133,6 +157,23 @@ export default function TaskDetailsModal({ open, onClose, task, onUpdate, onDele
       } catch (e) { alert("Ошибка добавления комментария") }
   }
 
+  const handleEditLog = async (logId: number) => {
+      if (!editingLogText.trim()) return
+      try {
+          const res = await api.put(`/task-logs/${logId}`, { message: editingLogText })
+          setLogs(logs.map(l => l.id === logId ? res.data : l))
+          setEditingLogId(null)
+          setEditingLogText('')
+      } catch (e) { alert("Ошибка редактирования") }
+  }
+
+  const handleDeleteLog = async (logId: number) => {
+      try {
+          await api.delete(`/task-logs/${logId}`)
+          setLogs(logs.filter(l => l.id !== logId))
+      } catch (e) { alert("Ошибка удаления") }
+  }
+
   const handleAddSubtask = async () => {
       if (!newSubtaskTitle.trim() || !task) return
       try {
@@ -181,6 +222,14 @@ export default function TaskDetailsModal({ open, onClose, task, onUpdate, onDele
     finally { setLoading(false) }
   }
 
+  const handleToggleFinished = async () => {
+    if (!task) return
+    try {
+      const res = await api.put(`/tasks/${task.id}`, { is_finished: !task.is_finished })
+      onUpdate(res.data)
+    } catch (e) { alert("Ошибка") }
+  }
+
   const handleDelete = async () => {
       if (!window.confirm("Удалить задачу?")) return
       setLoading(true)
@@ -202,7 +251,8 @@ export default function TaskDetailsModal({ open, onClose, task, onUpdate, onDele
 
   return (
     <div className="drawer-backdrop">
-      <div ref={modalContentRef} className="drawer-content">
+      <div ref={modalContentRef} className="drawer-content" style={{width: `${drawerWidth}px`}}>
+        <div className="drawer-resize-handle" onMouseDown={handleResizeStart} />
         {/* Breadcrumbs */}
         <div style={{fontSize: '13px', color: '#94a3b8', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px'}}>
             <span style={{cursor: 'pointer'}} onClick={onClose}>Доска</span>
@@ -218,16 +268,37 @@ export default function TaskDetailsModal({ open, onClose, task, onUpdate, onDele
             <span style={{fontWeight: '600', color: '#475569'}}>{task.title}</span>
         </div>
 
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '24px', flexShrink: 0}}>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexShrink: 0, gap: '12px'}}>
             {isEditing ? (
-                <input value={title} onChange={e => setTitle(e.target.value)} className="form-input-title" />
+                <input value={title} onChange={e => setTitle(e.target.value)} className="form-input-title" style={{flex: 1}} />
             ) : (
                 <h3 style={{margin: 0, flex: 1, fontSize: '24px', fontWeight: '700'}}>{task.title}</h3>
             )}
-            <button onClick={onClose} style={{background: 'transparent', border: 'none', fontSize: '1.5em', cursor: 'pointer', color: '#94a3b8'}}>&times;</button>
+            <div style={{display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0}}>
+                {!isEditing && (<>
+                  <button
+                    className="btn secondary"
+                    onClick={handleToggleFinished}
+                    disabled={loading}
+                    style={task.is_finished ? {color: '#0ea5a4', borderColor: '#0ea5a4', fontWeight: 600} : {}}
+                  >
+                    {task.is_finished ? '✓ Выполнено' : 'Отметить выполненной'}
+                  </button>
+                  <button className="btn secondary" onClick={handleDelete} disabled={loading} style={{color: '#ef4444', borderColor: '#fee2e2'}}>Удалить</button>
+                </>)}
+                {isEditing ? (
+                    <>
+                        <button className="btn secondary" onClick={() => setIsEditing(false)} disabled={loading}>Отмена</button>
+                        <button className="btn" onClick={handleSave} disabled={loading}>Сохранить</button>
+                    </>
+                ) : (
+                    <button className="btn" onClick={() => setIsEditing(true)}>Редактировать</button>
+                )}
+                <button onClick={onClose} style={{background: 'transparent', border: 'none', fontSize: '1.5em', cursor: 'pointer', color: '#94a3b8', lineHeight: 1}}>&times;</button>
+            </div>
         </div>
 
-        <div style={{display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, overflowY: 'auto', paddingRight: '4px'}}>
+        <div className="hide-scrollbar" style={{display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, overflowY: 'auto'}}>
             {/* Main Info */}
             <div style={{display: 'flex', gap: '32px', borderBottom: '1px solid #f1f5f9', paddingBottom: '24px'}}>
                 <div style={{flex: 1}}>
@@ -251,6 +322,12 @@ export default function TaskDetailsModal({ open, onClose, task, onUpdate, onDele
                     <label style={{fontSize: '0.75em', fontWeight: '700', textTransform: 'uppercase', color: '#94a3b8', display: 'block', marginBottom: '8px'}}>Создано</label>
                     <div style={{color: '#475569', fontSize: '14px'}}>{task.created_at ? formatMoscowTime(task.created_at) : '-'}</div>
                 </div>
+                {task.is_finished && (
+                    <div style={{flex: 1}}>
+                        <label style={{fontSize: '0.75em', fontWeight: '700', textTransform: 'uppercase', color: '#0ea5a4', display: 'block', marginBottom: '8px'}}>Завершено</label>
+                        <div style={{color: '#0ea5a4', fontSize: '14px', fontWeight: 500}}>{task.finished_at ? formatMoscowTime(task.finished_at) : '-'}</div>
+                    </div>
+                )}
             </div>
 
             {/* Description */}
@@ -355,42 +432,53 @@ export default function TaskDetailsModal({ open, onClose, task, onUpdate, onDele
             </div>
 
             {/* Comments */}
-            <div style={{marginTop: 'auto', borderTop: '1px solid #f1f5f9', paddingTop: '24px'}}>
+            <div style={{borderTop: '1px solid #f1f5f9', paddingTop: '24px'}}>
                 <label style={{fontSize: '0.75em', fontWeight: '700', textTransform: 'uppercase', color: '#94a3b8', display: 'block', marginBottom: '16px'}}>Комментарии ({logs.length})</label>
-                <div ref={logsContainerRef} style={{maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px', paddingRight: '8px'}}>
+                <div ref={logsContainerRef} className="hide-scrollbar" style={{overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px'}}>
                     {logs.map(log => {
                         const isMyComment = currentUser && log.user_id === currentUser.id
                         const author = log.user ? ([log.user.first_name, log.user.last_name].filter(Boolean).join(' ') || log.user.email) : 'Система'
+                        const isEditing = editingLogId === log.id
                         return (
-                            <div key={log.id} style={{alignSelf: isMyComment ? 'flex-end' : 'flex-start', maxWidth: '85%'}}>
-                                <div style={{fontSize: '11px', color: '#94a3b8', marginBottom: '4px', textAlign: isMyComment ? 'right' : 'left'}}>
+                            <div key={log.id} className="comment-row" style={{alignSelf: isMyComment ? 'flex-end' : 'flex-start', maxWidth: '85%'}}>
+                                <div style={{fontSize: '11px', color: '#94a3b8', marginBottom: '4px', textAlign: isMyComment ? 'right' : 'left', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: isMyComment ? 'flex-end' : 'flex-start'}}>
                                     <span style={{fontWeight: '700', color: '#64748b'}}>{author}</span> • {formatMoscowTime(log.created_at)}
+                                    {isMyComment && !isEditing && (
+                                        <span className="comment-actions">
+                                            <button className="comment-action-btn" title="Редактировать" onClick={() => { setEditingLogId(log.id); setEditingLogText(log.message) }}>✎</button>
+                                            <button className="comment-action-btn" title="Удалить" onClick={() => handleDeleteLog(log.id)}>✕</button>
+                                        </span>
+                                    )}
                                 </div>
-                                <div style={{background: isMyComment ? '#0ea5a4' : '#f1f5f9', color: isMyComment ? 'white' : '#1e293b', padding: '10px 14px', borderRadius: isMyComment ? '14px 14px 2px 14px' : '14px 14px 14px 2px', fontSize: '14px'}}>{log.message}</div>
+                                {isEditing ? (
+                                    <div style={{display: 'flex', gap: '6px', alignItems: 'center'}}>
+                                        <input
+                                            value={editingLogText}
+                                            onChange={e => setEditingLogText(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter') handleEditLog(log.id); if (e.key === 'Escape') setEditingLogId(null) }}
+                                            className="form-input"
+                                            autoFocus
+                                            style={{fontSize: '14px', padding: '8px 12px'}}
+                                        />
+                                        <button className="btn" onClick={() => handleEditLog(log.id)} style={{padding: '6px 12px', fontSize: '13px'}}>✓</button>
+                                        <button className="btn secondary" onClick={() => setEditingLogId(null)} style={{padding: '6px 12px', fontSize: '13px'}}>✕</button>
+                                    </div>
+                                ) : (
+                                    <div style={{background: isMyComment ? '#0ea5a4' : '#f1f5f9', color: isMyComment ? 'white' : '#1e293b', padding: '10px 14px', borderRadius: isMyComment ? '14px 14px 2px 14px' : '14px 14px 14px 2px', fontSize: '14px'}}>{log.message}</div>
+                                )}
                             </div>
                         )
                     })}
                 </div>
-                <div style={{display: 'flex', gap: '8px'}}>
-                    <input value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Напишите сообщение..." className="form-input" onKeyDown={e => { if (e.key === 'Enter') handleAddComment() }} />
-                    <button className="btn" onClick={handleAddComment} disabled={!newComment.trim()} style={{padding: '0 16px'}}>&#10148;</button>
-                </div>
             </div>
         </div>
 
-        <div className="modal-actions" style={{justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: '20px', backgroundColor: 'white'}}>
-            <button className="btn secondary" onClick={handleDelete} style={{color: '#ef4444', borderColor: '#fee2e2'}}>Удалить</button>
-            <div style={{display: 'flex', gap: '8px'}}>
-                {isEditing ? (
-                    <>
-                        <button className="btn secondary" onClick={() => setIsEditing(false)} disabled={loading}>Отмена</button>
-                        <button className="btn" onClick={handleSave} disabled={loading}>Сохранить</button>
-                    </>
-                ) : (
-                    <button className="btn" onClick={() => setIsEditing(true)}>Редактировать</button>
-                )}
-            </div>
+        {/* Comment input — always pinned to bottom */}
+        <div style={{flexShrink: 0, borderTop: '1px solid #f1f5f9', paddingTop: '16px', display: 'flex', gap: '8px'}}>
+            <input value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Напишите сообщение..." className="form-input" onKeyDown={e => { if (e.key === 'Enter') handleAddComment() }} />
+            <button className="btn" onClick={handleAddComment} disabled={!newComment.trim()} style={{padding: '0 16px'}}>&#10148;</button>
         </div>
+
       </div>
     </div>
   )
