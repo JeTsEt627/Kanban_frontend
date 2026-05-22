@@ -80,18 +80,24 @@ export default function CreateColumnModal({ open, onClose, onCreated, projectId 
 
   return (
     <div className="modal-backdrop">
-      <div className="modal">
+      <div className="modal" style={{ width: 440 }}>
         <h3>Создать колонку</h3>
         <form onSubmit={handleSubmit}>
           <div className="form-row">
             <label>Название</label>
-            <input value={name} onChange={e => setName(e.target.value)} autoFocus placeholder="Название колонки" />
+            <input
+              className="form-input"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              autoFocus
+              placeholder="Например, Backlog"
+            />
           </div>
 
           {error && <div className="error">{error}</div>}
           <div className="modal-actions">
-            <button type="button" onClick={onClose} disabled={loading}>Отмена</button>
-            <button type="submit" disabled={loading}>{loading ? 'Создание...' : 'Создать'}</button>
+            <button type="button" className="btn secondary" onClick={onClose} disabled={loading}>Отмена</button>
+            <button type="submit" className="btn" disabled={loading}>{loading ? 'Создание...' : 'Создать'}</button>
           </div>
         </form>
       </div>
